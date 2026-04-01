@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USCSS Terminal // MU-TH-UR 6000</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #000; display: flex; align-items: center; justify-content: center; }
+    body { padding: 16px; }
+
+    .ms-root { font-family: 'Courier New', Courier, monospace; background: #0a0a0a; color: #00ff41; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; width: 100%; max-width: 860px; min-height: 600px; position: relative; border: 1px solid #00ff41; }
+    .ms-header { background: #0d0d0d; border-bottom: 1px solid #00ff41; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .ms-title { font-size: 12px; letter-spacing: 2px; color: #00ff41; }
+    .ms-meta { font-size: 10px; color: #336633; display: flex; gap: 16px; align-items: center; }
+    .ms-body { display: flex; flex: 1; min-height: 0; }
+    .ms-terminal { flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; max-height: 540px; }
+    .ms-line { font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .ms-line.sys    { color: #00cc33; }
+    .ms-line.warn   { color: #ffaa00; }
+    .ms-line.danger { color: #ff3333; }
+    .ms-line.info   { color: #00aaff; }
+    .ms-line.muted  { color: #336633; }
+    .ms-panel { width: 230px; background: #0d0d0d; border-left: 1px solid #00ff41; display: flex; flex-direction: column; padding: 10px; gap: 6px; overflow-y: auto; max-height: 540px; }
+    .gm-label { font-size: 9px; letter-spacing: 2px; color: #336633; border-bottom: 1px solid #1a3a1a; padding-bottom: 3px; margin-top: 2px; }
+    .gm-btn { background: #0a0a0a; border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; font-size: 10px; padding: 5px 7px; cursor: pointer; text-align: left; letter-spacing: 1px; border-radius: 2px; width: 100%; }
+    .gm-btn:hover { background: #0f2a0f; }
+    .gm-btn.w { border-color: #ffaa00; color: #ffaa00; }
+    .gm-btn.w:hover { background: #1a1200; }
+    .gm-btn.d { border-color: #ff3333; color: #ff3333; }
+    .gm-btn.d:hover { background: #1a0000; }
+    .gm-btn.i { border-color: #00aaff; color: #00aaff; }
+    .gm-btn.i:hover { background: #00111a; }
+    .gm-btn.tog.active { background: #1a0000; border-color: #ff3333; color: #ff3333; }
+    .gm-hr { border: none; border-top: 1px solid #1a3a1a; margin: 2px 0; }
+    .gm-row { display: flex; gap: 4px; }
+    .gm-row .gm-btn { flex: 1; }
+    .gm-ta { background: #0a0a0a; border: 1px solid #336633; color: #00ff41; font-family: 'Courier New', monospace; font-size: 10px; padding: 5px; resize: vertical; min-height: 50px; border-radius: 2px; width: 100%; }
+    .gm-ta:focus { outline: none; border-color: #00ff41; }
+    .gm-sel { background: #0a0a0a; border: 1px solid #336633; color: #00ff41; font-family: 'Courier New', monospace; font-size: 10px; padding: 4px; border-radius: 2px; width: 100%; }
+    .gm-sel:focus { outline: none; border-color: #00ff41; }
+    .gm-inp { background: #0a0a0a; border: 1px solid #336633; color: #00ff41; font-family: 'Courier New', monospace; font-size: 10px; padding: 5px; border-radius: 2px; width: 100%; }
+    .gm-inp:focus { outline: none; border-color: #00ff41; }
+    .lock-err { font-size: 10px; color: #ff3333; min-height: 14px; }
+    .scanline { pointer-events: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px); border-radius: 8px; z-index: 10; }
+    .pill { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 2px; letter-spacing: 1px; }
+    .pill.gm { border: 1px solid #ffaa00; color: #ffaa00; }
+    .pill.pl { border: 1px solid #336633; color: #336633; }
+  </style>
+</head>
+<body>
+
+<div class="ms-root" id="root">
+  <div class="scanline"></div>
+  <div class="ms-header">
+    <span class="ms-title">USCSS // MU-TH-UR 6000</span>
+    <div class="ms-meta">
+      <span id="role-badge"></span>
+      <span id="sync-status">CONNECTING...</span>
+    </div>
+  </div>
+  <div class="ms-body">
+    <div class="ms-terminal" id="terminal"></div>
+    <div class="ms-panel" id="side-panel"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, onValue, set,
+           get, remove }                            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyAsp_9mHzbox0nY9FM3puHMmyYMn9FF9Hw",
+    authDomain:        "mothership-app-ce267.firebaseapp.com",
+    databaseURL:       "https://mothership-app-ce267-default-rtdb.firebaseio.com",
+    projectId:         "mothership-app-ce267",
+    storageBucket:     "mothership-app-ce267.firebasestorage.app",
+    messagingSenderId: "564047555799",
+    appId:             "1:564047555799:web:9dc0f0ec2fe0818437d492"
+  };
+
+  const app      = initializeApp(firebaseConfig);
+  const db       = getDatabase(app);
+  const msgsRef  = ref(db, 'messages');
+  const stateRef = ref(db, 'state');
+
+  const terminal = document.getElementById('terminal');
+  const panel    = document.getElementById('side-panel');
+  const syncEl   = document.getElementById('sync-status');
+  const badgeEl  = document.getElementById('role-badge');
+
+  const DEFAULT_CODE = 'nostromo';
+  let isGM      = false;
+  let redAlert  = false;
+  let silenced  = false;
+  let redInterval = null;
+  let knownKeys = new Set();
+
+  function ts() {
+    const n = new Date();
+    return `[${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}]`;
+  }
+  function pad(v) { return String(v).padStart(2, '0'); }
+
+  function appendLine(cls, text, t) {
+    const d = document.createElement('div');
+    d.className = `ms-line ${cls}`;
+    d.textContent = `${t}  ${text}`;
+    terminal.appendChild(d);
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  /* ── Firebase: listen for new messages in real time ── */
+  onValue(msgsRef, snapshot => {
+    const data = snapshot.val() || {};
+    const entries = Object.entries(data).sort((a,b) => (a[1].ts||0) - (b[1].ts||0));
+
+    const newKeys = new Set(Object.keys(data));
+
+    // Full re-render if messages were cleared (fewer keys than before)
+    if (newKeys.size < knownKeys.size) {
+      terminal.innerHTML = '';
+      knownKeys.clear();
+      entries.forEach(([k, m]) => {
+        appendLine(m.cls, m.text, m.t);
+        knownKeys.add(k);
+      });
+    } else {
+      // Append only new messages
+      entries.forEach(([k, m]) => {
+        if (!knownKeys.has(k)) {
+          appendLine(m.cls, m.text, m.t);
+          knownKeys.add(k);
+        }
+      });
+    }
+
+    syncEl.textContent = '● UPLINK ACTIVE';
+    syncEl.style.color = '#00cc33';
+  }, err => {
+    syncEl.textContent = '○ SYNC ERROR';
+    syncEl.style.color = '#ff3333';
+  });
+
+  /* ── Firebase: listen for shared state (red alert, silence) ── */
+  onValue(stateRef, snapshot => {
+    const s = snapshot.val() || {};
+    silenced = s.silenced || false;
+    const nowRed = s.redAlert || false;
+
+    if (!isGM) {
+      const ind = document.getElementById('red-ind');
+      if (ind) {
+        ind.textContent = nowRed ? 'RED ALERT ACTIVE' : 'STATUS: NOMINAL';
+        ind.style.color = nowRed ? '#ff3333' : '#336633';
+      }
+    } else {
+      const btn = document.getElementById('redBtn');
+      if (btn) btn.classList.toggle('active', nowRed);
+      const silBtn = document.getElementById('silBtn');
+      if (silBtn) silBtn.classList.toggle('active', silenced);
+    }
+    redAlert = nowRed;
+  });
+
+  /* ── Push a message to Firebase ── */
+  async function pushMessage(cls, text) {
+    const s = (await get(stateRef)).val() || {};
+    if (s.silenced) return;
+    await push(msgsRef, { cls, text, t: ts(), ts: Date.now() });
+  }
+
+  /* ── GM actions ── */
+  window.gmSend = (cls, text) => pushMessage(cls, text);
+
+  window.sendCustom = async () => {
+    const cls = document.getElementById('ctype').value;
+    const msg = document.getElementById('cmsg').value.trim();
+    if (!msg) return;
+    await pushMessage(cls, msg);
+    document.getElementById('cmsg').value = '';
+  };
+
+  window.toggleRed = async () => {
+    redAlert = !redAlert;
+    await set(stateRef, { redAlert, silenced });
+    if (redAlert) {
+      await pushMessage('danger', '!! RED ALERT INITIATED !! ALL CREW TO BATTLE STATIONS !!');
+      redInterval = setInterval(() => pushMessage('danger', '!! RED ALERT — ALL STATIONS STAND BY !!'), 9000);
+    } else {
+      clearInterval(redInterval);
+      await pushMessage('sys', 'Red alert cancelled. Stand down.');
+    }
+  };
+
+  window.toggleSilence = async () => {
+    silenced = !silenced;
+    await set(stateRef, { redAlert, silenced });
+    await pushMessage('muted', silenced ? '-- Output suppressed by GM --' : '-- Output resumed --');
+  };
+
+  window.clearTerminal = async () => {
+    await remove(msgsRef);
+    knownKeys.clear();
+    terminal.innerHTML = '';
+    await pushMessage('muted', '-- Terminal cleared by GM --');
+  };
+
+  window.changeCode = async () => {
+    const v = document.getElementById('newcode').value.trim().toLowerCase();
+    if (!v) return;
+    await set(ref(db, 'state/gmCode'), v);
+    document.getElementById('newcode').value = '';
+    await pushMessage('muted', '-- GM code updated --');
+  };
+
+  /* ── GM auth ── */
+  window.tryGM = async () => {
+    const input = document.getElementById('gmcode').value.trim().toLowerCase();
+    const snap  = await get(ref(db, 'state/gmCode'));
+    const code  = snap.val() || DEFAULT_CODE;
+    if (input === code) {
+      isGM = true;
+      buildGMPanel();
+      await pushMessage('muted', '-- GM uplink authenticated --');
+    } else {
+      const err = document.getElementById('auth-err');
+      if (err) { err.textContent = 'ACCESS DENIED'; setTimeout(() => { if (err) err.textContent = ''; }, 2000); }
+    }
+  };
+
+  /* ── Panel builders ── */
+  function buildGMPanel() {
+    badgeEl.innerHTML = '<span class="pill gm">GM UPLINK</span>';
+    panel.innerHTML = `
+      <div class="gm-label">SHIP ALERTS</div>
+      <button class="gm-btn i" onclick="gmSend('info','PROXIMITY ALERT: Unidentified mass detected. Bearing 224 mark 7. Distance: 0.3 AU.')">Proximity alert</button>
+      <button class="gm-btn w" onclick="gmSend('warn','WARNING: Hull integrity sensor offline — Section C-7 unmonitored.')">Hull sensor offline</button>
+      <button class="gm-btn w" onclick="gmSend('warn','WARNING: Life support CO2 scrubbers at 61% capacity. Reduce activity.')">Life support degraded</button>
+      <button class="gm-btn d" onclick="gmSend('danger','EMERGENCY: Airlock breach — Section D. Bulkheads engaged. DO NOT OPEN 4D.')">Airlock breach</button>
+      <button class="gm-btn d" onclick="gmSend('danger','EMERGENCY: Unauthorized motion detected in cargo hold. All crew respond.')">Intruder alert</button>
+      <button class="gm-btn"   onclick="gmSend('sys','COMMS: Incoming transmission. Source: Weyland-Yutani Special Order 37-B.')">Incoming transmission</button>
+      <div class="gm-hr"></div>
+      <div class="gm-label">ENVIRONMENT</div>
+      <button class="gm-btn w" onclick="gmSend('warn','ATMO PROCESSOR: Anomalous readings sector 6. Unscheduled thermal venting.')">Processor anomaly</button>
+      <button class="gm-btn i" onclick="gmSend('info','NAVIGATION: FTL spool initiated. Jump in 4 minutes.')">FTL spool</button>
+      <button class="gm-btn"   onclick="gmSend('muted','STATUS: All systems nominal. Crew vitals stable. ETA: 47 hours.')">All clear</button>
+      <div class="gm-hr"></div>
+      <div class="gm-row">
+        <button class="gm-btn tog d" id="redBtn" onclick="toggleRed()">RED ALERT</button>
+        <button class="gm-btn tog"   id="silBtn" onclick="toggleSilence()">SILENCE</button>
+      </div>
+      <button class="gm-btn w" onclick="clearTerminal()" style="margin-top:2px;">CLEAR TERMINAL</button>
+      <div class="gm-hr"></div>
+      <div class="gm-label">CUSTOM MESSAGE</div>
+      <select class="gm-sel" id="ctype">
+        <option value="sys">SYSTEM</option>
+        <option value="warn">WARNING</option>
+        <option value="danger">EMERGENCY</option>
+        <option value="info">INFO</option>
+        <option value="muted">MUTED</option>
+      </select>
+      <textarea class="gm-ta" id="cmsg" placeholder="Enter transmission..."></textarea>
+      <button class="gm-btn" onclick="sendCustom()" style="text-align:center;">TRANSMIT ></button>
+      <div class="gm-hr"></div>
+      <div class="gm-label">GM CODE</div>
+      <input class="gm-inp" id="newcode" type="text" placeholder="New code word...">
+      <button class="gm-btn" onclick="changeCode()" style="text-align:center;">CHANGE CODE</button>
+    `;
+  }
+
+  function buildPlayerPanel() {
+    badgeEl.innerHTML = '<span class="pill pl">CREW TERMINAL</span>';
+    panel.innerHTML = `
+      <div class="gm-label">TERMINAL STATUS</div>
+      <div id="red-ind" style="font-size:10px;color:#336633;letter-spacing:1px;padding:4px 0;">STATUS: NOMINAL</div>
+      <div class="gm-hr"></div>
+      <div class="gm-label" style="font-size:9px;">Read-only crew terminal. Live transmissions from ship AI and GM.</div>
+      <div class="gm-hr"></div>
+      <div class="gm-label">SIGNAL</div>
+      <div style="font-size:10px;color:#336633;">Live sync via Firebase</div>
+      <div class="gm-hr"></div>
+      <div class="gm-label">ACCESS</div>
+      <div style="font-size:10px;color:#336633;margin-bottom:6px;">GM? Enter code word:</div>
+      <input class="gm-inp" id="gmcode" type="password" placeholder="Code word...">
+      <button class="gm-btn" onclick="tryGM()" style="margin-top:4px;text-align:center;">AUTHENTICATE</button>
+      <div class="lock-err" id="auth-err"></div>
+    `;
+  }
+
+  /* ── Boot ── */
+  async function boot() {
+    buildPlayerPanel();
+    syncEl.textContent = 'CONNECTING...';
+    syncEl.style.color = '#336633';
+
+    const snap = await get(msgsRef);
+    if (!snap.exists()) {
+      const bootMsgs = [
+        { cls:'muted', text:'-------------------------------------------', t:ts(), ts: Date.now() },
+        { cls:'sys',   text:'MU-TH-UR 6000 — COMMERCIAL TOWING VESSEL OS', t:ts(), ts: Date.now()+1 },
+        { cls:'sys',   text:'FIREBASE RELAY :: LIVE SESSION ESTABLISHED',   t:ts(), ts: Date.now()+2 },
+        { cls:'muted', text:'-------------------------------------------', t:ts(), ts: Date.now()+3 },
+        { cls:'muted', text:'CREW TERMINAL READY. AWAITING TRANSMISSIONS.', t:ts(), ts: Date.now()+4 },
+      ];
+      for (const m of bootMsgs) await push(msgsRef, m);
+    }
+  }
+
+  boot();
+</script>
+</body>
+</html>
